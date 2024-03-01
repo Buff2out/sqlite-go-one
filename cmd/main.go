@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -93,17 +94,13 @@ func main() {
 	}
 	defer db.Close()
 
-	sugar.Infow("MSGDB", "ERR", err)
-
-	// делаем запрос
-	row := db.QueryRowContext(context.Background(),
-		"SELECT COUNT(*) as count FROM videos")
-	// готовим переменную для чтения результата
-	var id int64
-	err = row.Scan(&id) // разбираем результат
+	videos, err := readVideoCSV("src/USvideos.csv")
 	if err != nil {
-		sugar.Infow("MSGSCAN", "ERR", err)
+		sugar.Fatalw("Error to readVideoCSV() ", "errMsg", err)
 	}
-	sugar.Infow("MSGID", "ID", id)
-	sugar.Infow("MSGID", "success??", "REALLY?")
+	err = insertVideos(context.Background(), db, videos)
+	if err != nil {
+		sugar.Fatalw("Error to insertVideos() ", "errMsg", err)
+	}
+	sugar.Infow(fmt.Sprintf("Всего csv-записей %v\n", len(videos)))
 }
