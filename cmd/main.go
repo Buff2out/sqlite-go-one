@@ -80,8 +80,16 @@ func readVideoCSV(csvFile string) ([]Video, error) {
 
 func insertVideos(ctx context.Context, db *sql.DB, videos []Video) error {
 	/*
-		Загатова
+		пока что без возвращаемого значения LastInsertId() и RowsAffected()
 	*/
+	for _, val := range videos {
+		_, err := db.ExecContext(ctx,
+			"INSERT INTO videos (video_id, title, publish_time, tags, views) "+
+				"VALUES ($1, $2, $3, $4, $5)", val.Id, val.Title, val.PublishTime, strings.Join(val.Tags, "|"), val.Views)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -98,9 +106,12 @@ func main() {
 	if err != nil {
 		sugar.Fatalw("Error to readVideoCSV() ", "errMsg", err)
 	}
+	start := time.Now()
 	err = insertVideos(context.Background(), db, videos)
 	if err != nil {
 		sugar.Fatalw("Error to insertVideos() ", "errMsg", err)
 	}
-	sugar.Infow(fmt.Sprintf("Всего csv-записей %v\n", len(videos)))
+
+	sugar.Infow(fmt.Sprintf("Всего csv-записей: %v\n Затраченное время: %v\n",
+		len(videos), time.Since(start)))
 }
