@@ -96,7 +96,7 @@ func insertVideos(ctx context.Context, db *sql.DB, videos []Video) error {
 func main() {
 	sugar, logger := log.GetSugaredLogger()
 	defer logger.Sync()
-	db, err := sql.Open("sqlite", "src/video.db")
+	db, err := sql.Open("sqlite", "src/newvideo.db")
 	if err != nil {
 		sugar.Infow("CONN ERR", "KeyErr", err)
 	}
