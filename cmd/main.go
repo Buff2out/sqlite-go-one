@@ -24,13 +24,13 @@ type Video struct {
 	Views       int
 }
 
-func readVideoCSV(csvFile string) ([]Video, error) {
+func retrieveVideoCSVToDB(ctx context.Context, db *sql.DB, csvFile string) error {
 	file, errOpen := os.Open(csvFile)
 	if errOpen != nil {
-		return nil, errOpen
+		return errOpen
 	}
 	defer file.Close()
-	var videos []Video
+	var videos []Video = make([]Video, 0, 1000)
 
 	const (
 		Id          = 0
@@ -42,7 +42,7 @@ func readVideoCSV(csvFile string) ([]Video, error) {
 	r := csv.NewReader(file)
 	// пропускаем первую строку с неймингом полей
 	if _, errReadline := r.Read(); errReadline != nil {
-		return nil, errReadline
+		return errReadline
 	}
 	for {
 		line, err := r.Read()
@@ -50,14 +50,14 @@ func readVideoCSV(csvFile string) ([]Video, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 		v := Video{
 			Id:    line[Id],
 			Title: line[Title],
 		}
 		if v.PublishTime, err = time.Parse(time.RFC3339, line[PublishTime]); err != nil {
-			return nil, err
+			return err
 		}
 		tags := strings.Split(line[Tags], "|")
 		for i, val := range tags {
@@ -71,11 +71,17 @@ func readVideoCSV(csvFile string) ([]Video, error) {
 		}
 		v.Tags = tags
 		if v.Views, err = strconv.Atoi(line[Views]); err != nil {
-			return nil, err
+			return err
 		}
 		videos = append(videos, v)
+		if len(videos) == 1000 {
+			if err = insertVideos(ctx, db, videos); err != nil {
+				return err
+			}
+			videos = videos[:0]
+		}
 	}
-	return videos, nil
+	return insertVideos(ctx, db, videos)
 }
 
 func insertVideos(ctx context.Context, db *sql.DB, videos []Video) error {
@@ -132,17 +138,10 @@ func main() {
 	if errExec != nil {
 		sugar.Infow("INVALID TRY TO CREATE TABLE", "MSGERR", errExec)
 	}
-
-	videos, err := readVideoCSV("src/USvideos.csv")
+	start := time.Now()
+	err = retrieveVideoCSVToDB(context.Background(), db, "src/USvideos.csv")
 	if err != nil {
 		sugar.Fatalw("Error to readVideoCSV() ", "errMsg", err)
 	}
-	start := time.Now()
-	err = insertVideos(context.Background(), db, videos)
-	if err != nil {
-		sugar.Fatalw("Error to insertVideos() ", "errMsg", err)
-	}
-
-	sugar.Infow(fmt.Sprintf("Всего csv-записей: %v\n Затраченное время: %v\n",
-		len(videos), time.Since(start)))
+	sugar.Infow(fmt.Sprintf("Затраченное время: %v\n", time.Since(start)))
 }
