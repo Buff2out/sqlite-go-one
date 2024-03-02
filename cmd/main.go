@@ -82,15 +82,34 @@ func insertVideos(ctx context.Context, db *sql.DB, videos []Video) error {
 	/*
 		пока что без возвращаемого значения LastInsertId() и RowsAffected()
 	*/
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
 	for _, val := range videos {
-		_, err := db.ExecContext(ctx,
+		_, err := tx.ExecContext(ctx,
 			"INSERT INTO videos (video_id, title, publish_time, tags, views) "+
 				"VALUES ($1, $2, $3, $4, $5)", val.Id, val.Title, val.PublishTime, strings.Join(val.Tags, "|"), val.Views)
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
+}
+
+func SQLCreateTableVideos(db *sql.DB) error {
+	q := `CREATE TABLE IF NOT EXISTS videos (
+		"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+		"video_id" TEXT,
+		"title" TEXT,
+		"publish_time" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		"tags" TEXT,
+		"views" INTEGER NOT NULL DEFAULT 0
+	)`
+	_, err := db.Exec(q)
+	return err
 }
 
 func main() {
@@ -101,6 +120,10 @@ func main() {
 		sugar.Infow("CONN ERR", "KeyErr", err)
 	}
 	defer db.Close()
+	errExec := SQLCreateTableVideos(db)
+	if errExec != nil {
+		sugar.Infow("INVALID TRY TO CREATE TABLE", "MSGERR", errExec)
+	}
 
 	videos, err := readVideoCSV("src/USvideos.csv")
 	if err != nil {
