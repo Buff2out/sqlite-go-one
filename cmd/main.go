@@ -86,16 +86,24 @@ func insertVideos(ctx context.Context, db *sql.DB, videos []Video) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
+
+	stmt, errPrep := tx.PrepareContext(ctx,
+		"INSERT INTO videos (video_id, title, publish_time, tags, views) "+
+			"VALUES ($1, $2, $3, $4, $5)")
+
+	if errPrep != nil {
+		return errPrep
+	}
+	defer stmt.Close()
 
 	for _, val := range videos {
-		_, err := tx.ExecContext(ctx,
-			"INSERT INTO videos (video_id, title, publish_time, tags, views) "+
-				"VALUES ($1, $2, $3, $4, $5)", val.Id, val.Title, val.PublishTime, strings.Join(val.Tags, "|"), val.Views)
-		if err != nil {
-			tx.Rollback()
+		_, errExec := stmt.ExecContext(ctx, val.Id, val.Title, val.PublishTime, strings.Join(val.Tags, "|"), val.Views)
+		if errExec != nil {
 			return err
 		}
 	}
+
 	return tx.Commit()
 }
 
