@@ -121,7 +121,8 @@ func SQLCreateTableVideos(db *sql.DB) error {
 		"publish_time" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		"tags" TEXT,
 		"views" INTEGER NOT NULL DEFAULT 0
-	)`
+	);
+	CREATE INDEX IF NOT EXISTS video_id_idx ON videos (video_id);`
 	_, err := db.Exec(q)
 	return err
 }
