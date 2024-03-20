@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -22,6 +21,28 @@ type Video struct {
 	PublishTime time.Time
 	Tags        []string
 	Views       int
+}
+
+type TagVideo struct {
+	Tags string
+}
+
+func GetList(ctx context.Context, db *sql.DB) ([]TagVideo, error) {
+	rows, err := db.QueryContext(ctx,
+		"SELECT tags from videos where tags like '%best%' group by tags")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tagVideos := make([]TagVideo, 0)
+	for rows.Next() {
+		var video TagVideo
+		if err := rows.Scan(&video.Tags); err != nil {
+			return nil, err
+		}
+		tagVideos = append(tagVideos, video)
+	}
+	return tagVideos, nil
 }
 
 func retrieveVideoCSVToDB(ctx context.Context, db *sql.DB, csvFile string) error {
@@ -134,14 +155,30 @@ func main() {
 		sugar.Infow("CONN ERR", "KeyErr", err)
 	}
 	defer db.Close()
-	errExec := SQLCreateTableVideos(db)
-	if errExec != nil {
-		sugar.Infow("INVALID TRY TO CREATE TABLE", "MSGERR", errExec)
-	}
+
+	ctx := context.Background()
 	start := time.Now()
-	err = retrieveVideoCSVToDB(context.Background(), db, "src/USvideos.csv")
-	if err != nil {
-		sugar.Fatalw("Error to readVideoCSV() ", "errMsg", err)
+	videos, err := GetList(ctx, db)
+
+	var updates int64
+	for _, val := range videos {
+		var newTags []string
+		for _, tag := range strings.Split(val.Tags, "|") {
+			if !strings.Contains(strings.ToLower(tag), "best") {
+				newTags = append(newTags, tag)
+			}
+		}
+		res, err := db.ExecContext(ctx, "UPDATE videos SET tags = ? WHERE tags = ?", strings.Join(newTags, "|"), val.Tags)
+		if err != nil {
+			sugar.Fatalw("err to update videos")
+			return
+		}
+		// посмотрим, сколько записей было обновлено
+		if upd, err := res.RowsAffected(); err == nil {
+			updates += upd
+		}
 	}
-	sugar.Infow(fmt.Sprintf("Затраченное время: %v\n", time.Since(start)))
+
+	sugar.Infow("SUCCESS", "Затраченное время", time.Since(start))
+	sugar.Infow("total operations", "updates", updates)
 }
