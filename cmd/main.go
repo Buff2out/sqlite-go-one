@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Buff2out/sqlite-go-one/config/log"
+	"github.com/jmoiron/sqlx"
 
 	_ "modernc.org/sqlite"
 )
@@ -27,22 +28,11 @@ type TagVideo struct {
 	Tags string
 }
 
-func GetList(ctx context.Context, db *sql.DB) ([]TagVideo, error) {
-	rows, err := db.QueryContext(ctx,
-		"SELECT tags from videos where tags like '%best%' group by tags")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	tagVideos := make([]TagVideo, 0)
-	for rows.Next() {
-		var video TagVideo
-		if err := rows.Scan(&video.Tags); err != nil {
-			return nil, err
-		}
-		tagVideos = append(tagVideos, video)
-	}
-	return tagVideos, nil
+func GetList(ctx context.Context, db *sqlx.DB) (videos []TagVideo, err error) {
+	sqlSelect := `SELECT tags FROM videos 
+                    WHERE tags LIKE '%worst%' GROUP BY tags`
+	err = db.SelectContext(ctx, &videos, sqlSelect)
+	return
 }
 
 func retrieveVideoCSVToDB(ctx context.Context, db *sql.DB, csvFile string) error {
@@ -150,15 +140,18 @@ func SQLCreateTableVideos(db *sql.DB) error {
 func main() {
 	sugar, logger := log.GetSugaredLogger()
 	defer logger.Sync()
-	db, err := sql.Open("sqlite", "src/newvideo.db")
-	if err != nil {
-		sugar.Infow("CONN ERR", "KeyErr", err)
-	}
+	db := sqlx.MustOpen("sqlite", "newvideo.db")
 	defer db.Close()
 
 	ctx := context.Background()
 	start := time.Now()
 	videos, err := GetList(ctx, db)
+	if err != nil {
+		sugar.Fatalw("err in GetList", "err", err)
+		return
+	}
+
+	sqlUpdate := "UPDATE videos SET tags = ? WHERE tags = ?"
 
 	var updates int64
 	for _, val := range videos {
@@ -168,11 +161,7 @@ func main() {
 				newTags = append(newTags, tag)
 			}
 		}
-		res, err := db.ExecContext(ctx, "UPDATE videos SET tags = ? WHERE tags = ?", strings.Join(newTags, "|"), val.Tags)
-		if err != nil {
-			sugar.Fatalw("err to update videos")
-			return
-		}
+		res := db.MustExecContext(ctx, sqlUpdate, strings.Join(newTags, `|`), val.Tags)
 		// посмотрим, сколько записей было обновлено
 		if upd, err := res.RowsAffected(); err == nil {
 			updates += upd
