@@ -140,7 +140,7 @@ func SQLCreateTableVideos(db *sql.DB) error {
 func main() {
 	sugar, logger := log.GetSugaredLogger()
 	defer logger.Sync()
-	db := sqlx.MustOpen("sqlite", "newvideo.db")
+	db := sqlx.MustOpen("sqlite", "src/newvideo.db")
 	defer db.Close()
 
 	ctx := context.Background()

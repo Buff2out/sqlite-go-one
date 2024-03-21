@@ -3,6 +3,7 @@ module github.com/Buff2out/sqlite-go-one
 go 1.21.4
 
 require (
+	github.com/jmoiron/sqlx v1.3.5
 	go.uber.org/zap v1.26.0
 	modernc.org/sqlite v1.28.0
 )
